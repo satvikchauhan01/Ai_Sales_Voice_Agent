@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Sales Voice Agent - Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>SunRise Solar &middot; Sales Insights</h1>
+    <nav><a href="/">Call</a><a href="/dashboard">Dashboard</a></nav>
+  </header>
+
+  <main>
+    <div class="kpis" id="kpis"></div>
+
+    <div class="two-col">
+      <div class="card">
+        <h2>Top objections</h2>
+        <div id="objections" class="muted">-</div>
+        <h2 style="margin-top:16px">Languages / sentiment / outcomes</h2>
+        <div id="mix" class="muted">-</div>
+      </div>
+      <div class="card">
+        <h2>AI business insights</h2>
+        <button id="insights-btn" class="secondary">Generate insights from recent calls</button>
+        <pre class="insights" id="insights" style="margin-top:12px"></pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Leads (local CRM)</h2>
+      <table>
+        <thead><tr><th>Name</th><th>Phone</th><th>Status</th><th>Score</th><th>BANT</th><th>HubSpot</th></tr></thead>
+        <tbody id="leads"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Appointments</h2>
+      <table>
+        <thead><tr><th>Lead</th><th>Time (IST)</th><th>Calendar</th><th>Booking ID</th></tr></thead>
+        <tbody id="appointments"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Calls (click a row for transcript)</h2>
+      <table>
+        <thead><tr><th>#</th><th>Lead</th><th>Lang</th><th>Duration</th><th>Sentiment</th><th>Outcome</th><th>Summary</th></tr></thead>
+        <tbody id="calls"></tbody>
+      </table>
+    </div>
+
+    <div class="card hidden" id="detail-card">
+      <h2>Call detail <button class="secondary" style="float:right" onclick="document.getElementById('detail-card').classList.add('hidden')">Close</button></h2>
+      <div id="detail"></div>
+    </div>
+  </main>
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>
