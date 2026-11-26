@@ -11,13 +11,20 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from app import analysis, crm, db, llm, speech
-from app.config import BUSINESS, DEFAULT_LANGUAGE, TIMEZONE, TTS_LANGUAGES
+from app.config import BUSINESS, DEFAULT_LANGUAGE, LLM_FALLBACK_MODEL, LLM_MODEL, TIMEZONE, TTS_LANGUAGES
 from app.qualification import CRITERIA
 from app.tools import build_tools
 
 log = logging.getLogger("agent")
 IST = ZoneInfo(TIMEZONE)
 MIN_WORDS_TO_SWITCH_LANGUAGE = 3
+
+# Spoken when Gemini fails even after retries and the fallback model, so the call goes on
+# (the caller just repeats) instead of the browser showing a 502 error.
+SORRY = {
+    "en-IN": "Sorry, I had a small network problem. Could you please say that again?",
+    "hi-IN": "माफ़ कीजिए, नेटवर्क में थोड़ी दिक्कत हुई। क्या आप दोबारा बता सकते हैं?",
+}
 
 
 @dataclass
@@ -27,6 +34,9 @@ class CallSession:
     language: str               # language the agent currently speaks
     language_locked: bool       # True when the caller picked a language in the form
     chat: object                # Gemini chat (keeps short-term conversation memory)
+    system_prompt: str          # kept so the chat can be rebuilt on the fallback model
+    tools: list
+    model: str = LLM_MODEL      # model this call currently uses
     user_turns: int = 0
     started: float = field(default_factory=time.time)
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -128,6 +138,22 @@ def _speak(text: str, language: str) -> str:
     return speech.synthesize(text, language)
 
 
+def _send(session: CallSession, message: str):
+    """Send one message to Gemini. If the main model is overloaded (after its retries),
+    move this call to LLM_FALLBACK_MODEL, keeping the whole conversation history."""
+    try:
+        return session.chat.send_message(message)
+    except Exception as exc:
+        if not llm.is_temporary_error(exc) or not LLM_FALLBACK_MODEL or session.model == LLM_FALLBACK_MODEL:
+            raise
+        log.warning("call %s: %s failed (%s) - switching to %s",
+                    session.call_id, session.model, str(exc)[:80], LLM_FALLBACK_MODEL)
+        session.chat = llm.create_chat(session.system_prompt, session.tools,
+                                       model=LLM_FALLBACK_MODEL, history=session.chat.get_history())
+        session.model = LLM_FALLBACK_MODEL
+        return session.chat.send_message(message)
+
+
 def start_call(name: str, phone: str, email: str, language: str) -> dict:
     lead = db.upsert_lead(name.strip(), phone.strip(), email.strip(), language)
 
@@ -140,18 +166,30 @@ def start_call(name: str, phone: str, email: str, language: str) -> dict:
 
     returning_lead = len(db.list_calls(lead_id=lead["id"], limit=1)) > 0
     call_id = db.create_call(lead["id"], current_language)
-    chat = llm.create_chat(build_system_prompt(lead), build_tools(lead["id"], call_id))
+    system_prompt = build_system_prompt(lead)
+    tools = build_tools(lead["id"], call_id)
     session = CallSession(call_id=call_id, lead_id=lead["id"], language=current_language,
-                          language_locked=locked, chat=chat)
+                          language_locked=locked, chat=llm.create_chat(system_prompt, tools),
+                          system_prompt=system_prompt, tools=tools)
     SESSIONS[call_id] = session
 
     language_name = TTS_LANGUAGES[current_language]
-    response = chat.send_message(
-        f"[CALL CONNECTED. Speak {language_name}.] Greet {lead['name']} by name, introduce yourself "
-        f"and {BUSINESS['company']}, mention you are an AI assistant, and ask how you can help. "
-        f"Only if memory lists an 'Earlier call', refer to it briefly; otherwise do not mention any earlier conversation."
-    )
-    greeting = response.text or f"Hello {lead['name']}, this is {BUSINESS['agent_name']} from {BUSINESS['company']}."
+    greeting = ""
+    try:
+        response = _send(
+            session,
+            f"[CALL CONNECTED. Speak {language_name}.] Greet {lead['name']} by name, introduce yourself "
+            f"and {BUSINESS['company']}, mention you are an AI assistant, and ask how you can help. "
+            f"Only if memory lists an 'Earlier call', refer to it briefly; otherwise do not mention any earlier conversation.",
+        )
+        greeting = (response.text or "").strip()
+    except Exception as exc:
+        if not llm.is_temporary_error(exc):
+            raise
+        log.error("call %s: greeting failed on all models: %s", call_id, exc)
+    if not greeting:  # model down or empty reply -> simple fixed greeting, the call still starts
+        greeting = (f"Hello {lead['name']}, this is {BUSINESS['agent_name']}, an AI assistant from "
+                    f"{BUSINESS['company']}. How can I help you today?")
     db.add_turn(call_id, "agent", greeting, current_language)
 
     return {
@@ -175,8 +213,16 @@ def _respond(session: CallSession, user_text: str, detected_language: str | None
 
     language_name = TTS_LANGUAGES[session.language]
     t0 = time.time()
-    response = session.chat.send_message(f"[Caller speaks {language_name}. Reply in {language_name}.] {user_text}")
-    reply = (response.text or "").strip() or "Sorry, could you say that again?"
+    try:
+        response = _send(session, f"[Caller speaks {language_name}. Reply in {language_name}.] {user_text}")
+        reply = (response.text or "").strip()
+    except Exception as exc:
+        if not llm.is_temporary_error(exc):
+            raise  # a real bug: let it show up as an error
+        log.error("call %s: LLM failed on all models: %s", session.call_id, exc)
+        reply = ""
+    if not reply:
+        reply = SORRY.get(session.language, SORRY["en-IN"])
     llm_ms = int((time.time() - t0) * 1000)
 
     db.add_turn(session.call_id, "agent", reply, session.language)

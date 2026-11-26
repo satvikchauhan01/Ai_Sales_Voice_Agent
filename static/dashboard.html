@@ -2,62 +2,129 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Sales Voice Agent - Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Sales Overview · SunRise Solar Voice Agent</title>
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/dashboard.css">
 </head>
 <body>
-  <header>
-    <h1>SunRise Solar &middot; Sales Insights</h1>
-    <nav><a href="/">Call</a><a href="/dashboard">Dashboard</a></nav>
+
+  <header class="topbar">
+    <a class="brand" href="/">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <defs><linearGradient id="brandSun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC24A"/><stop offset="1" stop-color="#F26B1D"/></linearGradient></defs>
+        <rect width="32" height="32" rx="9" fill="#0F1B2D"/>
+        <path d="M8.5 21.5a7.5 7.5 0 0 1 15 0z" fill="url(#brandSun)"/>
+        <path d="M6.5 24h19" stroke="#FFC24A" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M16 7.5v2.4M9.9 10.2l1.6 1.6M22.1 10.2l-1.6 1.6" stroke="#FFC24A" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <span class="brand-name">SunRise Solar</span>
+      <span class="brand-sub">Voice Agent</span>
+    </a>
+    <nav class="tabs" aria-label="Pages">
+      <a href="/">Call</a>
+      <a href="/dashboard" class="active" aria-current="page">Dashboard</a>
+    </nav>
+    <div class="topbar-right">
+      <a class="btn primary sm start-cta" href="/">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <span>Start a call</span>
+      </a>
+    </div>
   </header>
 
-  <main>
-    <div class="kpis" id="kpis"></div>
-
-    <div class="two-col">
-      <div class="card">
-        <h2>Top objections</h2>
-        <div id="objections" class="muted">-</div>
-        <h2 style="margin-top:16px">Languages / sentiment / outcomes</h2>
-        <div id="mix" class="muted">-</div>
+  <main class="dash">
+    <div class="dash-head">
+      <div>
+        <h1>Sales overview</h1>
+        <p id="updated">Loading…</p>
       </div>
-      <div class="card">
-        <h2>AI business insights</h2>
-        <button id="insights-btn" class="secondary">Generate insights from recent calls</button>
-        <pre class="insights" id="insights" style="margin-top:12px"></pre>
+      <div class="actions">
+        <button class="btn ghost sm" id="refresh-btn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
+          Refresh
+        </button>
       </div>
     </div>
 
-    <div class="card">
-      <h2>Leads (local CRM)</h2>
-      <table>
-        <thead><tr><th>Name</th><th>Phone</th><th>Status</th><th>Score</th><th>BANT</th><th>HubSpot</th></tr></thead>
-        <tbody id="leads"></tbody>
-      </table>
-    </div>
+    <section class="kpis" id="kpis" aria-label="Key numbers"></section>
 
-    <div class="card">
-      <h2>Appointments</h2>
-      <table>
-        <thead><tr><th>Lead</th><th>Time (IST)</th><th>Calendar</th><th>Booking ID</th></tr></thead>
-        <tbody id="appointments"></tbody>
-      </table>
-    </div>
+    <section class="grid-3">
+      <article class="card">
+        <div class="card-head"><div><h2>Lead pipeline</h2><p>Leads by current status</p></div></div>
+        <div id="pipeline" class="bars"></div>
+      </article>
+      <article class="card">
+        <div class="card-head"><div><h2>Call sentiment</h2><p>Finished calls, judged by AI</p></div></div>
+        <div id="sentiment"></div>
+        <h3>Outcomes</h3>
+        <div id="outcomes" class="bars"></div>
+      </article>
+      <article class="card">
+        <div class="card-head"><div><h2>Top objections</h2><p>What callers push back on</p></div></div>
+        <div id="objections" class="bars"></div>
+      </article>
+    </section>
 
-    <div class="card">
-      <h2>Calls (click a row for transcript)</h2>
-      <table>
-        <thead><tr><th>#</th><th>Lead</th><th>Lang</th><th>Duration</th><th>Sentiment</th><th>Outcome</th><th>Summary</th></tr></thead>
-        <tbody id="calls"></tbody>
-      </table>
-    </div>
+    <section class="grid-2-1">
+      <article class="card">
+        <div class="card-head">
+          <div><h2>AI business insights</h2><p>Gemini reads recent call summaries and suggests what to change</p></div>
+          <button id="insights-btn" class="btn primary sm" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2z"/></svg>
+            Generate insights
+          </button>
+        </div>
+        <div id="insights" class="insights">
+          <div class="insights-empty"><b>No insights yet</b>Click "Generate insights" to get 4 actionable suggestions from your recent calls.</div>
+        </div>
+      </article>
+      <article class="card">
+        <div class="card-head"><div><h2>Languages</h2><p>Calls by spoken language</p></div></div>
+        <div id="languages" class="bars"></div>
+      </article>
+    </section>
 
-    <div class="card hidden" id="detail-card">
-      <h2>Call detail <button class="secondary" style="float:right" onclick="document.getElementById('detail-card').classList.add('hidden')">Close</button></h2>
-      <div id="detail"></div>
-    </div>
+    <section class="card">
+      <div class="card-head"><div><h2>Leads</h2><p>Local CRM · synced to HubSpot when connected</p></div></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Lead</th><th>Status</th><th>Score</th><th>BANT</th><th>Language</th><th>HubSpot</th><th>Updated</th></tr></thead>
+          <tbody id="leads"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="grid-1-2">
+      <article class="card">
+        <div class="card-head"><div><h2>Site surveys</h2><p>Booked by Priya</p></div></div>
+        <ul id="appointments" class="appts"></ul>
+      </article>
+      <article class="card">
+        <div class="card-head"><div><h2>Recent calls</h2><p>Click a call for its summary and transcript</p></div></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Lead</th><th>Language</th><th class="num">Length</th><th>Sentiment</th><th>Outcome</th><th>Summary</th></tr></thead>
+            <tbody id="calls"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
   </main>
+
+  <!-- call detail drawer -->
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <aside class="drawer" id="detail-card" aria-label="Call detail" aria-hidden="true">
+    <header>
+      <div><h2 id="detail-title">Call</h2><p id="detail-sub"></p></div>
+      <button class="icon-btn" id="detail-close" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+    <div class="drawer-body" id="detail"></div>
+  </aside>
+
+  <div class="tip" id="tip" role="tooltip" hidden></div>
   <script src="/static/dashboard.js"></script>
 </body>
 </html>

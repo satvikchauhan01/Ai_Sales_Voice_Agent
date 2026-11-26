@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ui-fakes",
+      "runtimeExecutable": "D:\\ai-sales-voice-agent\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": [
+        "-c",
+        "import os, runpy; os.environ['PORT'] = '8010'; os.environ['HUBSPOT_ACCESS_TOKEN'] = ''; runpy.run_module('tests.run_with_fakes', run_name='__main__')"
+      ],
+      "port": 8010
+    }
+  ]
+}

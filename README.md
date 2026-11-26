@@ -19,7 +19,7 @@ optional free HubSpot and Cal.com accounts.
 | CRM integration | Local CRM (leads table + pipeline status) always; HubSpot contact/deal/note sync if token set (`app/crm.py`) |
 | Call summary + business insights | Summary per call + dashboard KPIs, top objections, AI insights (`/dashboard`) |
 
-Docs: [Architecture](docs/ARCHITECTURE.md) | [Scaling to 1 lakh users, security, costs](docs/SCALING.md) | [Demo script + live-coding prep](docs/DEMO_SCRIPT.md)
+Docs: [One-page report](docs/PROJECT_REPORT.md) | [Architecture](docs/ARCHITECTURE.md) | [Scaling to 1 lakh users, security, costs](docs/SCALING.md) | [Demo script + live-coding prep](docs/DEMO_SCRIPT.md)
 
 ---
 

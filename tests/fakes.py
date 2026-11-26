@@ -63,6 +63,11 @@ def fake_generate(self, *, model, contents, config=None):
         return _text(json.dumps(ANALYSIS_JSON))
 
     last = contents[-1] if isinstance(contents, list) else contents
+    if isinstance(last, str):  # plain-text prompt = business insights request
+        return _text("1. Most callers ask about price first: mention EMI early.\n"
+                     "2. Price is the top objection: lead with subsidy and payback.\n"
+                     "3. Callers with bills above 4,000 rupees book surveys most often.\n"
+                     "4. Offer two survey slots, not one, to raise the booking rate.")
     parts = last.parts or []
     function_responses = [p.function_response for p in parts if p.function_response]
 

@@ -71,6 +71,28 @@ def _deal_stage(lead_status: str) -> str:
         return ""
 
 
+def _upsert_deal(lead: dict, contact_id: str, stage: str) -> str:
+    """Move the lead's existing deal to `stage`, or create one linked to the contact."""
+    if lead["hubspot_deal_id"]:
+        response = httpx.patch(
+            f"{HUBSPOT_URL}/crm/v3/objects/deals/{lead['hubspot_deal_id']}",
+            json={"properties": {"dealstage": stage}},
+            headers=_headers(),
+            timeout=15,
+        )
+        if response.status_code >= 300:
+            raise RuntimeError(f"HubSpot deal update failed ({response.status_code}): {response.text[:200]}")
+        return lead["hubspot_deal_id"]
+
+    deal = _post(
+        "/crm/v3/objects/deals",
+        {"properties": {"dealname": f"{lead['name']} - Rooftop solar", "pipeline": "default", "dealstage": stage}},
+    )
+    _associate("deal", deal["id"], "contact", contact_id)
+    db.update_lead(lead["id"], hubspot_deal_id=deal["id"])
+    return deal["id"]
+
+
 def sync_call(lead_id: int, call_id: int, summary: str) -> dict:
     if not hubspot_enabled():
         return {"hubspot": "skipped (no token) - lead saved in local CRM"}
@@ -82,22 +104,11 @@ def sync_call(lead_id: int, call_id: int, summary: str) -> dict:
 
         stage = _deal_stage(lead["status"])
         if stage:
-            if lead["hubspot_deal_id"]:
-                httpx.patch(
-                    f"{HUBSPOT_URL}/crm/v3/objects/deals/{lead['hubspot_deal_id']}",
-                    json={"properties": {"dealstage": stage}},
-                    headers=_headers(),
-                    timeout=15,
-                )
-                result["hubspot_deal_id"] = lead["hubspot_deal_id"]
-            else:
-                deal = _post(
-                    "/crm/v3/objects/deals",
-                    {"properties": {"dealname": f"{lead['name']} - Rooftop solar", "pipeline": "default", "dealstage": stage}},
-                )
-                _associate("deal", deal["id"], "contact", contact_id)
-                db.update_lead(lead_id, hubspot_deal_id=deal["id"])
-                result["hubspot_deal_id"] = deal["id"]
+            try:
+                result["hubspot_deal_id"] = _upsert_deal(lead, contact_id, stage)
+            except Exception as exc:  # e.g. token without deals scope: still save the note below
+                log.error("HubSpot deal sync failed: %s", exc)
+                result["hubspot_deal_error"] = str(exc)[:200]
 
         note_body = f"AI call #{call_id} | Lead status: {lead['status']} (score {lead['score']})\n{summary}"
         note = _post(

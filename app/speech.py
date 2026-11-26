@@ -4,6 +4,7 @@ Both are plain HTTP calls, so they are easy to debug: print the status code and 
 """
 import logging
 import re
+import time
 
 import httpx
 
@@ -31,6 +32,19 @@ def _headers() -> dict:
     return {"api-subscription-key": SARVAM_API_KEY}
 
 
+def _post(path: str, attempts: int = 3, **kwargs) -> httpx.Response:
+    """POST to Sarvam, retrying when the connection itself fails (network blip, timeout, or a
+    firewall breaking the HTTPS certificate check). HTTP error codes are NOT retried here."""
+    for attempt in range(1, attempts + 1):
+        try:
+            return httpx.post(f"{SARVAM_BASE_URL}{path}", headers=_headers(), timeout=30, **kwargs)
+        except httpx.TransportError as exc:
+            if attempt == attempts:
+                raise SpeechError(f"Could not reach Sarvam ({path}): {exc}") from exc
+            log.warning("Sarvam %s connection failed (try %d/%d): %s", path, attempt, attempts, exc)
+            time.sleep(0.5)
+
+
 def transcribe(wav_bytes: bytes, language_code: str = "unknown") -> dict:
     """Audio (WAV, 16 kHz from the browser VAD) -> {"text": ..., "language": ...}.
 
@@ -41,13 +55,7 @@ def transcribe(wav_bytes: bytes, language_code: str = "unknown") -> dict:
     if STT_MODEL.startswith("saaras"):
         data["mode"] = "transcribe"  # mode only exists for saaras models
 
-    response = httpx.post(
-        f"{SARVAM_BASE_URL}/speech-to-text",
-        headers=_headers(),
-        files=files,
-        data=data,
-        timeout=30,
-    )
+    response = _post("/speech-to-text", files=files, data=data)
     if response.status_code != 200:
         raise SpeechError(f"STT failed ({response.status_code}): {response.text[:300]}")
 
@@ -75,17 +83,13 @@ def synthesize(text: str, language_code: str) -> str:
         "speaker": TTS_SPEAKER,
         "model": TTS_MODEL,
     }
-    response = httpx.post(
-        f"{SARVAM_BASE_URL}/text-to-speech", headers=_headers(), json=payload, timeout=30
-    )
+    response = _post("/text-to-speech", json=payload)
 
     # Older API versions named the field target_language_code. Retry once if needed.
     if response.status_code in (400, 422) and "language_code" in response.text:
         log.warning("TTS rejected language_code, retrying with target_language_code")
         payload["target_language_code"] = payload.pop("language_code")
-        response = httpx.post(
-            f"{SARVAM_BASE_URL}/text-to-speech", headers=_headers(), json=payload, timeout=30
-        )
+        response = _post("/text-to-speech", json=payload)
 
     if response.status_code != 200:
         raise SpeechError(f"TTS failed ({response.status_code}): {response.text[:300]}")
